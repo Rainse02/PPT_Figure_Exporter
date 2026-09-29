@@ -1,0 +1,12 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--
+    The machine has the .NET Framework runtime but not the 4.8 developer pack.
+    build.ps1 downloads the official Microsoft.NETFramework.ReferenceAssemblies.net48
+    package into .build/tools and this property makes both frontend and test projects
+    resolve their framework reference assemblies without a system-wide install.
+  -->
+  <PropertyGroup>
+    <PptExporterReferenceAssembliesPath Condition="'$(PptExporterReferenceAssembliesPath)' == ''">$(MSBuildThisFileDirectory).build\tools\net48-reference\build\.NETFramework\v4.8</PptExporterReferenceAssembliesPath>
+    <FrameworkPathOverride Condition="'$(FrameworkPathOverride)' == '' and Exists('$(PptExporterReferenceAssembliesPath)')">$(PptExporterReferenceAssembliesPath)</FrameworkPathOverride>
+  </PropertyGroup>
+</Project>

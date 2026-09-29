@@ -1,0 +1,15 @@
+.build/
+dist/
+native/target/
+frontend/bin/
+frontend/obj/
+tests/output/
+docs/
+__pycache__/
+*.user
+*.suo
+
+
+
+tests/bin/
+tests/obj/

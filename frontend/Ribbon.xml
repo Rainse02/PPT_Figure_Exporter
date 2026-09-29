@@ -1,0 +1,31 @@
+<customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui" onLoad="OnRibbonLoad">
+  <ribbon>
+    <tabs>
+      <tab id="FigureExporterTab" label="Figure Export">
+        <group id="SelectionGroup" label="选中图形">
+          <labelControl id="SelectionSize" getLabel="GetSelectionLabel" />
+          <dropDown id="SizeMode" label="尺寸模式" getSelectedItemID="GetMode" onAction="OnMode">
+            <item id="keep" label="保持 PPT 尺寸" />
+            <item id="width" label="按宽度等比" />
+            <item id="height" label="按高度等比" />
+            <item id="custom" label="自定义宽高（拉伸）" />
+            <item id="scale" label="缩放百分比" />
+          </dropDown>
+          <button id="SettingsButton" label="尺寸与质量设置…" imageMso="PropertySheet" onAction="OnSettings" />
+        </group>
+        <group id="OutputGroup" label="输出">
+          <dropDown id="Format" label="格式" getSelectedItemID="GetFormat" onAction="OnFormat">
+            <item id="tiff" label="TIFF" /><item id="png" label="PNG" />
+            <item id="svg" label="SVG" /><item id="pdf" label="PDF" />
+            <item id="jpeg" label="JPEG" /><item id="webp" label="WebP" />
+          </dropDown>
+          <editBox id="Dpi" label="DPI" getText="GetDpi" onChange="OnDpi" getEnabled="GetRasterEnabled" sizeString="9600" />
+          <checkBox id="Transparent" label="保留透明背景" getPressed="GetTransparent" onAction="OnTransparent" getEnabled="GetTransparencyEnabled" />
+        </group>
+        <group id="ExportGroup" label="导出图形">
+          <button id="ExportFigure" label="导出图形…" size="large" imageMso="FileSaveAs" onAction="OnExport" getEnabled="GetExportEnabled" screentip="导出选中的图形或组合" supertip="请先用 Ctrl+G 将图形组合，再选中一个组合。导出不会更改原幻灯片。" />
+        </group>
+      </tab>
+    </tabs>
+  </ribbon>
+</customUI>

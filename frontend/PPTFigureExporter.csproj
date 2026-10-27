@@ -32,7 +32,10 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.IO.Compression" />
     <Reference Include="System.Drawing" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="WindowsBase" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Xml" />
@@ -42,6 +45,10 @@
     <Compile Include="Interop.cs" />
     <Compile Include="Settings.cs" />
     <Compile Include="ExportService.cs" />
+    <Compile Include="PowerPointSvgExporter.cs" />
+    <Compile Include="PowerPointRasterExporter.cs" />
+    <Compile Include="PresentationPictures.cs" />
+    <Compile Include="NativePictureEffects.cs" />
     <Compile Include="SettingsDialog.cs" />
     <Compile Include="Connect.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

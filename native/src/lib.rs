@@ -81,7 +81,8 @@ pub enum Unit {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Request {
-    pub input_svg: String,
+    #[serde(alias = "input_svg")]
+    pub input_path: String,
     pub output_path: String,
     pub format: OutputFormat,
     pub source_width_pt: f64,
@@ -137,22 +138,31 @@ fn default_quality() -> u8 {
 pub fn process_request(request: &Request) -> Result<Response, CoreError> {
     validate_request_basics(request)?;
     let target = calculate_target_size(request)?;
-    let input_path = Path::new(&request.input_svg);
+    let input_path = Path::new(&request.input_path);
     let output_path = Path::new(&request.output_path);
     validate_paths(input_path, output_path)?;
 
-    let source = fs::read(input_path)
-        .map_err(|error| CoreError::Input(format!("无法读取 SVG 输入：{error}")))?;
-    let source_text = std::str::from_utf8(&source)
-        .map_err(|_| CoreError::Input("SVG 输入不是 UTF-8 文本".to_owned()))?;
-    let normalized = normalize_svg(source_text, target)?;
-
-    let output = match request.format {
-        OutputFormat::Svg => normalized.into_bytes(),
-        OutputFormat::Pdf => render_pdf(&normalized)?,
-        OutputFormat::Png | OutputFormat::Tiff | OutputFormat::Jpeg | OutputFormat::Webp => {
-            let pixels = render_raster(&normalized, target)?;
-            encode_raster(&pixels, target, request)?
+    let source =
+        fs::read(input_path).map_err(|error| CoreError::Input(format!("无法读取输入：{error}")))?;
+    let output = if source.starts_with(b"\x89PNG\r\n\x1a\n") {
+        if matches!(request.format, OutputFormat::Svg | OutputFormat::Pdf) {
+            return Err(CoreError::InvalidRequest(
+                "PNG 输入仅支持 PNG、TIFF、JPEG 或 WebP 栅格输出".to_owned(),
+            ));
+        }
+        let pixels = decode_png(&source, target)?;
+        encode_raster(&pixels, target, request)?
+    } else {
+        let source_text = std::str::from_utf8(&source)
+            .map_err(|_| CoreError::Input("SVG 输入不是 UTF-8 文本".to_owned()))?;
+        let normalized = normalize_svg(source_text, target)?;
+        match request.format {
+            OutputFormat::Svg => normalized.into_bytes(),
+            OutputFormat::Pdf => render_pdf(&normalized)?,
+            OutputFormat::Png | OutputFormat::Tiff | OutputFormat::Jpeg | OutputFormat::Webp => {
+                let pixels = render_raster(&normalized, target)?;
+                encode_raster(&pixels, target, request)?
+            }
         }
     };
 
@@ -169,8 +179,8 @@ pub fn process_request(request: &Request) -> Result<Response, CoreError> {
 }
 
 fn validate_request_basics(request: &Request) -> Result<(), CoreError> {
-    if request.input_svg.trim().is_empty() {
-        return Err(CoreError::InvalidRequest("input_svg 不能为空".to_owned()));
+    if request.input_path.trim().is_empty() {
+        return Err(CoreError::InvalidRequest("input_path 不能为空".to_owned()));
     }
     if request.output_path.trim().is_empty() {
         return Err(CoreError::InvalidRequest("output_path 不能为空".to_owned()));
@@ -319,7 +329,7 @@ fn round_ties_even(value: f64) -> f64 {
 fn validate_paths(input: &Path, output: &Path) -> Result<(), CoreError> {
     if !input.is_file() {
         return Err(CoreError::Input(format!(
-            "输入 SVG 不存在或不是文件：{}",
+            "输入文件不存在或不是文件：{}",
             input.display()
         )));
     }
@@ -327,7 +337,7 @@ fn validate_paths(input: &Path, output: &Path) -> Result<(), CoreError> {
     let output_absolute = canonical_or_absolute(output)?;
     if paths_equal(&input_absolute, &output_absolute) {
         return Err(CoreError::InvalidRequest(
-            "input_svg 与 output_path 不能相同".to_owned(),
+            "input_path 与 output_path 不能相同".to_owned(),
         ));
     }
     if output.exists() && output.is_dir() {
@@ -682,6 +692,82 @@ struct RasterPixels {
     rgba: Vec<u8>,
 }
 
+fn decode_png(source: &[u8], target: TargetSize) -> Result<RasterPixels, CoreError> {
+    let target_width = target
+        .pixel_width
+        .ok_or_else(|| CoreError::Input("PNG 输入需要栅格目标画布".to_owned()))?;
+    let target_height = target
+        .pixel_height
+        .ok_or_else(|| CoreError::Input("PNG 输入需要栅格目标画布".to_owned()))?;
+    let mut decoder = png::Decoder::new(std::io::Cursor::new(source));
+    decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
+    let header = decoder
+        .read_header_info()
+        .map_err(|error| CoreError::Input(format!("PNG 头读取失败：{error}")))?;
+    let width = header.width;
+    let height = header.height;
+    if width == 0 || height == 0 {
+        return Err(CoreError::Input("PNG 尺寸必须是正数".to_owned()));
+    }
+    if u64::from(width) * u64::from(height) > MAX_PIXELS {
+        return Err(CoreError::Input("PNG 输入超过 8000 万像素".to_owned()));
+    }
+    if width > target_width || height > target_height {
+        return Err(CoreError::Input(format!(
+            "PNG 输入尺寸 {width}×{height} 超过目标画布 {target_width}×{target_height}，核心不会缩放 PNG"
+        )));
+    }
+    let mut reader = decoder
+        .read_info()
+        .map_err(|error| CoreError::Input(format!("PNG 信息读取失败：{error}")))?;
+    let mut decoded = vec![0; reader.output_buffer_size()];
+    let info = reader
+        .next_frame(&mut decoded)
+        .map_err(|error| CoreError::Input(format!("PNG 解码失败：{error}")))?;
+    if info.width != width || info.height != height {
+        return Err(CoreError::Input("PNG 帧尺寸与图像尺寸不一致".to_owned()));
+    }
+    if info.bit_depth != png::BitDepth::Eight || info.color_type == png::ColorType::Indexed {
+        return Err(CoreError::Input("PNG 解码后的像素格式不受支持".to_owned()));
+    }
+
+    let mut rgba = vec![0; target_width as usize * target_height as usize * 4];
+    let offset_x = (target_width - width) / 2;
+    let offset_y = (target_height - height) / 2;
+    let channels = info.color_type.samples();
+    for (row_index, row) in decoded[..info.buffer_size()]
+        .chunks_exact(info.line_size)
+        .enumerate()
+    {
+        let start =
+            ((offset_y as usize + row_index) * target_width as usize + offset_x as usize) * 4;
+        let destination = &mut rgba[start..start + width as usize * 4];
+        for (pixel, destination) in row
+            .chunks_exact(channels)
+            .zip(destination.chunks_exact_mut(4))
+        {
+            match info.color_type {
+                png::ColorType::Rgb => {
+                    destination.copy_from_slice(&[pixel[0], pixel[1], pixel[2], 255]);
+                }
+                png::ColorType::Rgba => destination.copy_from_slice(pixel),
+                png::ColorType::Grayscale => {
+                    destination.copy_from_slice(&[pixel[0], pixel[0], pixel[0], 255]);
+                }
+                png::ColorType::GrayscaleAlpha => {
+                    destination.copy_from_slice(&[pixel[0], pixel[0], pixel[0], pixel[1]]);
+                }
+                png::ColorType::Indexed => unreachable!(),
+            }
+        }
+    }
+    Ok(RasterPixels {
+        width: target_width,
+        height: target_height,
+        rgba,
+    })
+}
+
 fn render_raster(svg: &str, target: TargetSize) -> Result<RasterPixels, CoreError> {
     let width = target
         .pixel_width
@@ -995,7 +1081,7 @@ mod tests {
 
     fn request(mode: SizeMode) -> Request {
         Request {
-            input_svg: "input.svg".to_owned(),
+            input_path: "input.svg".to_owned(),
             output_path: "output.png".to_owned(),
             format: OutputFormat::Png,
             source_width_pt: 144.0,

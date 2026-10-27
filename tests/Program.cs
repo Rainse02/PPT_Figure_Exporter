@@ -28,6 +28,8 @@ internal static class Program
             TestRibbon();
             if (args.Contains("--office"))
                 TestOffice(output);
+            if (args.Contains("--bitmap-quality"))
+                BitmapQualityTests.Run(output, Assert);
             if (args.Contains("--render-ui"))
                 RenderUi(output);
             Console.WriteLine("PASS: " + assertions + " assertions");
@@ -204,12 +206,22 @@ internal static class Program
                 foreach (string format in new[] { "svg", "pdf", "png", "tiff", "jpeg", "webp" })
                 {
                     var options = new ExportSettings { Format = format, Dpi = 300, Transparent = true };
+                    string input = svg;
+                    if (options.IsRaster)
+                    {
+                        input = Path.Combine(folder, "figure-" + format + ".png");
+                        selected.ExportRaster(input, options.Target(selected.WidthPt, selected.HeightPt),
+                            options.SizeMode == "custom");
+                        Assert(File.Exists(input), "PowerPoint native raster input for " + format);
+                    }
                     string destination = Path.Combine(output, "office-figure." + options.Extension);
-                    string request = ExportService.WriteRequest(folder, svg, destination, selected, options, true);
+                    string request = ExportService.WriteRequest(folder, input, destination, selected, options, true);
                     var result = ExportService.RunAsync(request, CancellationToken.None).GetAwaiter().GetResult();
                     Assert(result.ok && File.Exists(destination), "Office fixture exports " + format);
                     Near(result.width_pt, selected.WidthPt, format + " physical width");
                     Near(result.height_pt, selected.HeightPt, format + " physical height");
+                    Assert(before == Snapshot(presentation, group, unrelated),
+                        format + ": exporting preserves source presentation and objects");
                 }
                 group.Export(Path.Combine(output, "powerpoint-reference.png"), 2, 1920, 1080);
                 File.WriteAllText(Path.Combine(output, "office-result.json"), new JavaScriptSerializer().Serialize(new
@@ -238,7 +250,6 @@ internal static class Program
             }
             if (app != null)
             {
-                app.Quit();
                 Marshal.ReleaseComObject((object)app);
             }
         }

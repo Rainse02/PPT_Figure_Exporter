@@ -7,20 +7,23 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
-using System.Xml;
 
 namespace PPTFigureExporter
 {
     internal sealed class SelectedFigure : IDisposable
     {
         private object shape;
+        private object presentation;
+        private readonly int slideId;
         public double WidthPt { get; private set; }
         public double HeightPt { get; private set; }
         public string Name { get; private set; }
 
-        private SelectedFigure(object value)
+        private SelectedFigure(object value, object sourcePresentation, int sourceSlideId)
         {
             shape = value;
+            presentation = sourcePresentation;
+            slideId = sourceSlideId;
             dynamic selected = value;
             WidthPt = (double)selected.Width;
             HeightPt = (double)selected.Height;
@@ -33,6 +36,9 @@ namespace PPTFigureExporter
             object selection = null;
             object range = null;
             object selected = null;
+            object presentation = null;
+            object view = null;
+            object slide = null;
             try
             {
                 window = ((dynamic)application).ActiveWindow;
@@ -47,8 +53,12 @@ namespace PPTFigureExporter
                 if ((int)((dynamic)range).Count != 1)
                     throw new InvalidOperationException("选中了多个独立对象。请先按 Ctrl+G 组合，再导出。");
                 selected = ((dynamic)range)[1];
-                var figure = new SelectedFigure(selected);
+                presentation = ((dynamic)window).Presentation;
+                view = ((dynamic)window).View;
+                slide = ((dynamic)view).Slide;
+                var figure = new SelectedFigure(selected, presentation, (int)((dynamic)slide).SlideID);
                 selected = null;
+                presentation = null;
                 return figure;
             }
             catch (COMException ex)
@@ -57,6 +67,9 @@ namespace PPTFigureExporter
             }
             finally
             {
+                Release(slide);
+                Release(view);
+                Release(presentation);
                 Release(selected);
                 Release(range);
                 Release(selection);
@@ -66,39 +79,20 @@ namespace PPTFigureExporter
 
         public void ExportSvg(string path)
         {
-            // Only reads/exports the selected shape. No slide, shape or clipboard mutations.
-            try
-            {
-                ((dynamic)shape).Export(path, 6);
-            }
-            catch (COMException ex)
-            {
-                throw new InvalidOperationException("PowerPoint 无法通过自动化接口导出 SVG。请使用支持该接口的新版 PowerPoint，并检查所选图形内容。", ex);
-            }
-            if (!File.Exists(path) || new FileInfo(path).Length == 0)
-                throw new IOException("PowerPoint 未生成有效的 SVG 文件。");
-            // Older Office builds silently write JPEG for the unsupported SVG enum value.
-            // Inspect content: the file extension alone does not establish SVG support.
-            try
-            {
-                var options = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
-                using (var reader = XmlReader.Create(path, options))
-                {
-                    reader.MoveToContent();
-                    if (reader.LocalName != "svg" || reader.NamespaceURI != "http://www.w3.org/2000/svg")
-                        throw new XmlException("根元素不是 SVG。");
-                }
-            }
-            catch (XmlException ex)
-            {
-                throw new InvalidOperationException("此 PowerPoint 自动化接口没有生成真实 SVG。手动另存为 SVG 与自动化导出的版本支持可能不同，请更新 Office。", ex);
-            }
+            PowerPointSvgExporter.Export(shape, presentation, slideId, path);
+        }
+
+        public void ExportRaster(string path, SizePoints target, bool stretch)
+        {
+            PowerPointRasterExporter.Export(shape, presentation, path, target, stretch);
         }
 
         public void Dispose()
         {
             Release(shape);
             shape = null;
+            Release(presentation);
+            presentation = null;
         }
 
         private static void Release(object value)
@@ -130,7 +124,7 @@ namespace PPTFigureExporter
         {
             var request = new
             {
-                input_svg = input,
+                input_path = input,
                 output_path = output,
                 format = settings.Format,
                 source_width_pt = figure.WidthPt,

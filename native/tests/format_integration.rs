@@ -9,17 +9,19 @@ static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn test_directory() -> PathBuf {
     let counter = TEST_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let directory = std::env::temp_dir().join(format!(
-        "figure-export-core-test-{}-{counter}",
-        std::process::id()
-    ));
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../.build/native-tests")
+        .join(format!(
+            "figure-export-core-test-{}-{counter}",
+            std::process::id()
+        ));
     fs::create_dir_all(&directory).unwrap();
     directory
 }
 
 fn request(input: &Path, output: &Path, format: OutputFormat) -> Request {
     Request {
-        input_svg: input.to_string_lossy().into_owned(),
+        input_path: input.to_string_lossy().into_owned(),
         output_path: output.to_string_lossy().into_owned(),
         format,
         source_width_pt: 144.0,

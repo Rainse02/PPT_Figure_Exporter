@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -30,6 +30,8 @@ internal static class Program
                 TestOffice(output);
             if (args.Contains("--bitmap-quality"))
                 BitmapQualityTests.Run(output, Assert);
+            if (args.Contains("--pdf-quality"))
+                NativePdfTests.Run(output, Assert);
             if (args.Contains("--render-ui"))
                 RenderUi(output);
             Console.WriteLine("PASS: " + assertions + " assertions");
@@ -207,7 +209,14 @@ internal static class Program
                 {
                     var options = new ExportSettings { Format = format, Dpi = 300, Transparent = true };
                     string input = svg;
-                    if (options.IsRaster)
+                    PdfCrop pdfCrop = null;
+                    if (format == "pdf")
+                    {
+                        input = Path.Combine(folder, "figure-native.pdf");
+                        pdfCrop = selected.ExportPdf(input);
+                        Assert(File.Exists(input), "PowerPoint native PDF input");
+                    }
+                    else if (options.IsRaster)
                     {
                         input = Path.Combine(folder, "figure-" + format + ".png");
                         selected.ExportRaster(input, options.Target(selected.WidthPt, selected.HeightPt),
@@ -215,7 +224,7 @@ internal static class Program
                         Assert(File.Exists(input), "PowerPoint native raster input for " + format);
                     }
                     string destination = Path.Combine(output, "office-figure." + options.Extension);
-                    string request = ExportService.WriteRequest(folder, input, destination, selected, options, true);
+                    string request = ExportService.WriteRequest(folder, input, destination, selected, options, true, pdfCrop);
                     var result = ExportService.RunAsync(request, CancellationToken.None).GetAwaiter().GetResult();
                     Assert(result.ok && File.Exists(destination), "Office fixture exports " + format);
                     Near(result.width_pt, selected.WidthPt, format + " physical width");

@@ -167,12 +167,16 @@ namespace PPTFigureExporter
                         bool overwrite = File.Exists(save.FileName);
                         temporary = Path.Combine(Path.GetTempPath(), "PPTFigureExporter", Guid.NewGuid().ToString("N"));
                         Directory.CreateDirectory(temporary);
-                        string input = Path.Combine(temporary, settings.IsRaster ? "figure.png" : "figure.svg");
+                        string extension = settings.IsRaster ? "png" : settings.Format;
+                        string input = Path.Combine(temporary, "figure." + extension);
+                        PdfCrop pdfCrop = null;
                         if (settings.IsRaster)
                             figure.ExportRaster(input, target, settings.SizeMode == "custom");
+                        else if (settings.Format == "pdf")
+                            pdfCrop = figure.ExportPdf(input);
                         else
                             figure.ExportSvg(input);
-                        string request = ExportService.WriteRequest(temporary, input, save.FileName, figure, settings.Copy(), overwrite);
+                        string request = ExportService.WriteRequest(temporary, input, save.FileName, figure, settings.Copy(), overwrite, pdfCrop);
                         using (var progress = new ExportProgress(request))
                         {
                             progress.ShowDialog(Owner());

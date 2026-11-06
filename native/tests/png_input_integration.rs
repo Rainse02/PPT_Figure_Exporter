@@ -38,6 +38,7 @@ impl Drop for TestDirectory {
 fn raster_request(input: &Path, output: &Path, width: u32, height: u32, dpi: u32) -> Request {
     Request {
         input_path: input.to_string_lossy().into_owned(),
+        pdf_crop: None,
         output_path: output.to_string_lossy().into_owned(),
         format: OutputFormat::Tiff,
         source_width_pt: f64::from(width) * 72.0 / f64::from(dpi),

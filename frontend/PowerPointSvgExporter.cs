@@ -117,7 +117,7 @@ namespace PPTFigureExporter
             }
         }
 
-        private static object FindPicture(object root, int id, string name)
+        internal static object FindPicture(object root, int id, string name)
         {
             if ((int)((dynamic)root).Type != 6)
                 return null;

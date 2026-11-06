@@ -26,6 +26,7 @@
     <Compile Include="Program.cs" />
     <Compile Include="BitmapQualityTests.cs" />
     <Compile Include="NativeRasterTests.cs" />
+    <Compile Include="NativePdfTests.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

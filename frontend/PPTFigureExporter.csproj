@@ -47,6 +47,7 @@
     <Compile Include="ExportService.cs" />
     <Compile Include="PowerPointSvgExporter.cs" />
     <Compile Include="PowerPointRasterExporter.cs" />
+    <Compile Include="PowerPointPdfExporter.cs" />
     <Compile Include="PresentationPictures.cs" />
     <Compile Include="NativePictureEffects.cs" />
     <Compile Include="SettingsDialog.cs" />

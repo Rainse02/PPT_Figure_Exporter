@@ -45,7 +45,7 @@ PowerPoint 的 SVG 自动化接口从 Windows 版 Version 2302 开始提供，�
 | 格式 | 用途与设置 |
 | --- | --- |
 | SVG | 矢量图，适合继续编辑和网页使用 |
-| PDF | 矢量排版，页面大小与目标图形尺寸一致 |
+| PDF | PowerPoint 原生输出，保留公式与图形，页面大小与目标尺寸一致 |
 | TIFF | LZW 无损压缩，写入 DPI，支持透明背景 |
 | PNG | 无损压缩，写入分辨率信息，支持透明背景 |
 | JPEG | 白色背景，质量可设为 1–100 |
@@ -94,7 +94,8 @@ cargo fetch --manifest-path .\native\Cargo.toml --locked --target x86_64-pc-wind
 C# COM 加载项负责 PowerPoint 功能区、设置和选区读取，并按输出类型调用 `Shape.Export`：
 
 - 位图输出：PowerPoint 将选中对象直接渲染为目标像素范围内的 PNG，Rust 核心编码为 TIFF、PNG、JPEG 或 WebP，不再缩放。对象绘制边界和像素舍入产生的余量居中补边；透明关闭时填充白底。
-- 矢量输出：PowerPoint 生成 SVG，前端用文稿内的原始位图资源替换低清预览，保留 SVG 的裁剪和变换。图片校正及颜色处理交给 PowerPoint。Rust 核心调整物理尺寸或通过 svg2pdf 生成 PDF。
+- PDF 输出：PowerPoint 将选中对象保存为完整的 EMF 矢量绘制单元，再通过临时画布原生输出 PDF。画布比例根据原图像素确定，避免图片被默认降采样。Rust 核心裁剪到图形边界并设置目标尺寸，保留 PDF 的文字、矢量路径和图像资源。
+- SVG 输出：PowerPoint 生成 SVG，前端用文稿内的原始位图资源替换低清预览，保留 SVG 的裁剪和变换。图片校正及颜色处理交给 PowerPoint，Rust 核心调整物理尺寸。
 
 `frontend/` 是加载项，`native/` 是转换核心，`installer/` 是安装器定义，`scripts/` 提供构建工具，`tests/` 包含前端和 Office 联调测试。`Directory.Build.props` 配置 .NET 引用程序集路径，`native/Cargo.lock` 固定 Rust 依赖版本。
 
@@ -102,7 +103,7 @@ C# COM 加载项负责 PowerPoint 功能区、设置和选区读取，并按输�
 
 设置保存在 `%APPDATA%\PPTFigureExporter\settings.json`，错误日志位于同目录的 `export.log`。插件会记住导出参数和最后使用的输出目录。
 
-每次导出的中间 PNG、SVG、必要的文稿副本和请求文件放在 `%TEMP%\PPTFigureExporter\` 的独立子目录中，任务结束后清理。崩溃或强制结束进程可能留下文件；取消转换时，输出目录也可能留下带 `.figure-export-` 标记的临时文件。当前版本没有自动清扫历史残留的功能。手动清理前关闭 PowerPoint，并确认 `figure-export-core.exe` 已退出，只删除这些已确认的临时文件。
+每次导出的中间 PNG、SVG、EMF、PDF、必要的文稿快照和请求文件放在 `%TEMP%\PPTFigureExporter\` 的独立子目录中，任务结束后清理。崩溃或强制结束进程可能留下文件；取消转换时，输出目录也可能留下带 `.figure-export-` 标记的临时文件。当前版本没有自动清扫历史残留的功能。手动清理前关闭 PowerPoint，并确认 `figure-export-core.exe` 已退出，只删除这些已确认的临时文件。
 
 ## 许可证
 

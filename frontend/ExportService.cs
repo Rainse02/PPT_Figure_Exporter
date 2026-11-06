@@ -82,6 +82,11 @@ namespace PPTFigureExporter
             PowerPointSvgExporter.Export(shape, presentation, slideId, path);
         }
 
+        public PdfCrop ExportPdf(string path)
+        {
+            return PowerPointPdfExporter.Export(shape, presentation, slideId, path);
+        }
+
         public void ExportRaster(string path, SizePoints target, bool stretch)
         {
             PowerPointRasterExporter.Export(shape, presentation, path, target, stretch);
@@ -120,11 +125,12 @@ namespace PPTFigureExporter
             get { return Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "figure-export-core.exe"); }
         }
 
-        public static string WriteRequest(string folder, string input, string output, SelectedFigure figure, ExportSettings settings, bool overwrite)
+        public static string WriteRequest(string folder, string input, string output, SelectedFigure figure, ExportSettings settings, bool overwrite, PdfCrop pdfCrop = null)
         {
             var request = new
             {
                 input_path = input,
+                pdf_crop = pdfCrop,
                 output_path = output,
                 format = settings.Format,
                 source_width_pt = figure.WidthPt,

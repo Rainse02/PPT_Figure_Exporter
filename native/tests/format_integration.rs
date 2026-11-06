@@ -22,6 +22,7 @@ fn test_directory() -> PathBuf {
 fn request(input: &Path, output: &Path, format: OutputFormat) -> Request {
     Request {
         input_path: input.to_string_lossy().into_owned(),
+        pdf_crop: None,
         output_path: output.to_string_lossy().into_owned(),
         format,
         source_width_pt: 144.0,

@@ -8,6 +8,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use roxmltree::{Document, ParsingOptions};
 use serde::{Deserialize, Serialize};
 
+mod pdf;
+
 const MAX_PIXELS: u64 = 80_000_000;
 const MAX_WEBP_DIMENSION: u32 = 16_383;
 const DEFAULT_DPI: u32 = 1_000;
@@ -78,11 +80,22 @@ pub enum Unit {
     Inch,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PdfCrop {
+    pub left_pt: f64,
+    pub top_pt: f64,
+    pub width_pt: f64,
+    pub height_pt: f64,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Request {
     #[serde(alias = "input_svg")]
     pub input_path: String,
+    #[serde(default)]
+    pub pdf_crop: Option<PdfCrop>,
     pub output_path: String,
     pub format: OutputFormat,
     pub source_width_pt: f64,
@@ -144,7 +157,14 @@ pub fn process_request(request: &Request) -> Result<Response, CoreError> {
 
     let source =
         fs::read(input_path).map_err(|error| CoreError::Input(format!("无法读取输入：{error}")))?;
-    let output = if source.starts_with(b"\x89PNG\r\n\x1a\n") {
+    let output = if source.starts_with(b"%PDF-") {
+        if request.format != OutputFormat::Pdf {
+            return Err(CoreError::InvalidRequest(
+                "PDF 输入仅支持 PDF 输出".to_owned(),
+            ));
+        }
+        pdf::crop_and_resize(&source, request.pdf_crop, target)?
+    } else if source.starts_with(b"\x89PNG\r\n\x1a\n") {
         if matches!(request.format, OutputFormat::Svg | OutputFormat::Pdf) {
             return Err(CoreError::InvalidRequest(
                 "PNG 输入仅支持 PNG、TIFF、JPEG 或 WebP 栅格输出".to_owned(),
@@ -1082,6 +1102,7 @@ mod tests {
     fn request(mode: SizeMode) -> Request {
         Request {
             input_path: "input.svg".to_owned(),
+            pdf_crop: None,
             output_path: "output.png".to_owned(),
             format: OutputFormat::Png,
             source_width_pt: 144.0,
